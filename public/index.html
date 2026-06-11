@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control Generador AWG</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin-top: 30px; background-color: #222; color: #fff;}
+        .panel { background-color: #333; padding: 20px; border-radius: 10px; display: inline-block; margin-bottom: 20px;}
+        button { font-size: 18px; padding: 15px 25px; margin: 10px; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s;}
+        button:active { transform: scale(0.95); }
+        
+        /* Colores por categorias */
+        .btn-onda { background-color: #2196F3; color: white; border: none; }
+        .btn-rapido { background-color: #4CAF50; color: white; border: none; }
+        .btn-lento { background-color: #f44336; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <h1>Generador de Funciones MCP4822</h1>
+    
+    <div class="panel">
+        <h3>Forma de Onda</h3>
+        <button class="btn-onda" onclick="mandarComando('SENO')">Senoidal</button>
+        <button class="btn-onda" onclick="mandarComando('CUADRADA')">Cuadrada</button>
+        <button class="btn-onda" onclick="mandarComando('SIERRA')">Diente de Sierra</button>
+    </div>
+    <br>
+    <div class="panel">
+        <h3>Frecuencia</h3>
+        <button class="btn-lento" onclick="mandarComando('MAS_LENTO')">- Frecuencia (Lento)</button>
+        <button class="btn-rapido" onclick="mandarComando('MAS_RAPIDO')">+ Frecuencia (R�pido)</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function mandarComando(orden) {
+            socket.emit('comando_generador', orden);
+            console.log("Enviando: " + orden);
+        }
+    </script>
+</body>
+</html>
