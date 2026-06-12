@@ -58,7 +58,7 @@ print("\nConectado! IP de la Pico W:", wlan.ifconfig()[0])
 # 4. CONEXION AL SERVIDOR PI 5 (Socket TCP)
 # ==========================================
 cliente = socket.socket()
-IP_PI_5 = '192.168.100.167.'  # <-- PON LA IP DE TU PI 5 AQUI
+IP_PI_5 = '192.168.100.167'  # <-- PON LA IP DE TU PI 5 AQUI
 PUERTO = 8080
 
 try:
@@ -100,10 +100,23 @@ while True:
                 onda_actual = puntos_cuadrada
             elif comando == "SIERRA":
                 onda_actual = puntos_sierra
-            elif comando == "MAS_RAPIDO":
-                intervalo_onda = max(50, intervalo_onda - 100)
-            elif comando == "MAS_LENTO":
-                intervalo_onda = intervalo_onda + 100
-                
+            elif comando.startswith("FREQ:"):
+                try:
+                    
+                    freq_hz = int(comando.split(":")[1])
+                    
+                    if freq_hz > 0:
+                        
+                        nuevo_intervalo = int(1000000 / (freq_hz * 100))
+                        
+                       
+                        if nuevo_intervalo < 50:
+                            intervalo_onda = 50
+                        else:
+                            intervalo_onda = nuevo_intervalo
+                            
+                        print("Nueva frecuencia fijada:", freq_hz, "Hz (Intervalo:", intervalo_onda, "us)")
+                except Exception as e:
+                    print("Error al procesar frecuencia:", e)    
     except OSError:
         pass
