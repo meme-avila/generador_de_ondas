@@ -36,9 +36,10 @@ io.on('connection', (clienteWeb) => {
     clienteWeb.on('comando_generador', (instruccion) => {
         console.log('Orden desde el telefono:', instruccion);
         
-        // Si la Pico W esta conectada, le rebotamos el mensaje inmediatamente
+               // Si la Pico W esta conectada, le rebotamos el mensaje inmediatamente
         if (picoSocket) {
-            picoSocket.write(instruccion); 
+            // Convertimos a String por seguridad y le pegamos el salto de l�nea
+            picoSocket.write(String(instruccion) + '\n'); 
         } else {
             console.log('Aviso: La orden no se envi�, Pico W no conectada');
         }

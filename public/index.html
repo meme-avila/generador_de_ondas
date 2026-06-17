@@ -106,10 +106,20 @@
         <div class="marcador-frecuencia" id="pantalla-frecuencia">1 Hz</div>
         
         <div class="contenedor-perilla">
-            <div class="perilla" id="miPerilla">
-                <div class="indicador-perilla"></div>
-            </div>
+        <div class="perilla" id="miPerilla">
+            <div class="indicador-perilla"></div>
         </div>
+    </div>
+
+    <div style="margin-top: 25px; border-top: 1px dashed #444; padding-top: 15px;">
+        <h4 style="margin: 0 0 10px 0; color: #888;">ENTRADA DIRECTA</h4>
+        <input type="number" id="input-frecuencia" placeholder="Ej. 150000" min="1" 
+               style="padding: 10px; font-size: 16px; width: 140px; border-radius: 5px; 
+                      border: 1px solid #00ff00; background-color: #111; color: #00ff00; 
+                      font-family: inherit; text-align: center; outline: none;">
+        <button onclick="enviarFrecuenciaExacta()">FIJAR</button>
+    </div>
+</div> ```
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -195,6 +205,35 @@
                 estaArrastrando = false;
                 // ¡AQUÍ ENVIAMOS EL COMANDO! Solo cuando levantas el dedo
                 mandarComando('FREQ:' + frecuenciaActual);
+            }
+        });
+        // --- NUEVA FUNCI�N PARA LA TEXTBOX ---
+        function enviarFrecuenciaExacta() {
+            const inputFrecuencia = document.getElementById('input-frecuencia');
+            const valorExacto = parseInt(inputFrecuencia.value);
+
+            // Validaci�n de seguridad b�sica
+            if (!isNaN(valorExacto) && valorExacto > 0) {
+                // 1. Actualizamos la variable global
+                frecuenciaActual = valorExacto;
+                
+                // 2. Actualizamos el letrero verde visual
+                pantalla.innerText = frecuenciaActual + ' Hz';
+                
+                // 3. �Fuego! Disparamos el comando a Node.js
+                mandarComando('FREQ:' + frecuenciaActual);
+                
+                // 4. Limpiamos la caja para el siguiente n�mero
+                inputFrecuencia.value = '';
+            } else {
+                alert("�Error de instrumentaci�n! Introduce una frecuencia v�lida mayor a 0 Hz.");
+            }
+        }
+
+        // (Opcional) Poder presionar "Enter" en el teclado para enviar, sin usar el bot�n
+        document.getElementById('input-frecuencia').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                enviarFrecuenciaExacta();
             }
         });
     </script>
