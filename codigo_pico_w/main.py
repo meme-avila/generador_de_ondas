@@ -1,122 +1,143 @@
-import machine
-import math
-import time
 import network
 import socket
+import rp2
+import math
+import time
+from machine import Pin
 
 # ==========================================
-# 1. CONFIGURACION SPI Y DAC
+# 1. EL MÚSCULO: MÁQUINA DE ESTADOS (PIO)
 # ==========================================
-spi = machine.SPI(0, baudrate=10000000, polarity=0, phase=0, sck=machine.Pin(18), mosi=machine.Pin(19))
-cs = machine.Pin(16, machine.Pin.OUT)
-cs.value(1)
-
-def enviar_dac(valor):
-    valor = int(valor) & 0x0FFF
-    comando = 0x3000 | valor
-    cs.value(0)
-    spi.write(bytearray([(comando >> 8) & 0xFF, comando & 0xFF]))
-    cs.value(1)
+@rp2.asm_pio(out_init=(rp2.PIO.OUT_LOW,) * 8, out_shiftdir=rp2.PIO.SHIFT_RIGHT)
+def dac_r2r():
+    wrap_target()
+    pull()          # Espera a que Python mande el dato
+    out(pins, 8)    # Lo saca por los 8 pines en 1 ciclo
+    wrap()
 
 # ==========================================
-# 2. PRECALCULAR TODAS LAS ONDAS (LUTs)
+# 2. PRECALCULAR ONDAS (8 Bits para R2R))
 # ==========================================
 puntos_seno = []
 puntos_cuadrada = []
 puntos_sierra = []
+N = 100 # Puntos por ciclo
 
-for i in range(100):
-    # Onda Senoidal
-    puntos_seno.append(int(2047 + 2047 * math.sin(2 * math.pi * i / 100)))
+print("Calculando geometría de las ondas...")
+for i in range(N):
+    # Onda Seno (0 a 255)
+    puntos_seno.append(int(127.5 + 127.5 * math.sin(2 * math.pi * i / N)))
     
-    # Onda Cuadrada (50% de ciclo util)
-    if i < 50:
-        puntos_cuadrada.append(4095)
+    # Onda Cuadrada (Mitad 255, Mitad 0)
+    if i < (N / 2):
+        puntos_cuadrada.append(255)
     else:
         puntos_cuadrada.append(0)
         
-    # Onda Diente de Sierra
-    puntos_sierra.append(int((4095 / 99) * i))
+    # Onda Diente de Sierra (0 a 255)
+    puntos_sierra.append(int((255 / (N - 1)) * i))
 
-# Variable maestra: define que onda se esta dibujando actualmente
 onda_actual = puntos_seno 
 
 # ==========================================
-# 3. CONEXION WIFI
+# 3. CONEXIÓN WI-FI AL HOTSPOT DE LA PI 5
 # ==========================================
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
+
 if not wlan.isconnected():
-    print("Conectando a la red WiFi...")
-    wlan.connect('Raspi_memo') # <-- PON TUS DATOS AQUI
-    while not wlan.isconnected():
-        time.sleep(0.5)
+    print("Conectando al Hotspot 'Raspi_memo'...")
+    wlan.connect('Raspi_memo') 
+    
+    # Bucle de espera seguro para no colgar el sistema
+    intentos = 0
+    while not wlan.isconnected() and intentos < 20:
+        time.sleep(1)
         print(".", end="")
-print("\nConectado! IP de la Pico W:", wlan.ifconfig()[0])
+        intentos += 1
+
+if wlan.isconnected():
+    print("\n¡Conectado exitosamente!")
+    print("IP de la Pico W:", wlan.ifconfig()[0])
+else:
+    print("\nFallo al conectar al Wi-Fi. Revisa la red de la Pi 5.")
 
 # ==========================================
-# 4. CONEXION AL SERVIDOR PI 5 (Socket TCP)
+# 4. CONEXIÓN AL SERVIDOR PI 5 (Socket TCP)
 # ==========================================
 cliente = socket.socket()
-IP_PI_5 = '192.168.100.167'  # <-- PON LA IP DE TU PI 5 AQUI
+IP_PI_5 = '192.168.100.167'  # <-- IP MAESTRA DE TU PI 5
 PUERTO = 8080
 
 try:
     cliente.connect((socket.getaddrinfo(IP_PI_5, PUERTO)[0][-1]))
-    cliente.setblocking(False) 
-    print("Conectado al servidor maestro de la Pi 5")
+    cliente.setblocking(False) # CRÍTICO: Hace que recv() no pause el código
+    print(f"Conectado al servidor TCP en {IP_PI_5}:{PUERTO}")
 except OSError:
-    print("Error: No se encontro el servidor. Iniciando modo autonomo...")
+    print("Error: No se encontró el servidor Node.js. Iniciando modo autónomo...")
 
 # ==========================================
-# 5. LA MAQUINA DE ESTADOS
+# 5. INICIALIZACIÓN DEL HARDWARE PIO
 # ==========================================
-tiempo_anterior = time.ticks_us()
-intervalo_onda = 500 
-indice = 0
+frecuencia_hz = 1000 # Arrancamos a 1 kHz por defecto
+f_pio = frecuencia_hz * N * 2
 
-print("Generador AWG listo y esperando comandos...")
+sm = rp2.StateMachine(0, dac_r2r, freq=f_pio, out_base=Pin(0))
+sm.active(1)
 
-while True:
-    tiempo_actual = time.ticks_us()
-    
-    # TAREA A: Dibujar la onda seleccionada
-    if time.ticks_diff(tiempo_actual, tiempo_anterior) >= intervalo_onda:
-        enviar_dac(onda_actual[indice])
-        indice = (indice + 1) % 100
-        tiempo_anterior = tiempo_actual
+print("Generador R2R por Hardware listo y esperando comandos...")
+
+# ==========================================
+# 6. EL BUCLE PRINCIPAL ASÍNCRONO
+# ==========================================
+try:
+    while True:
+        # TAREA A: Escuchar al servidor Node.js
+        try:
+            datos_crudos = cliente.recv(1024)
+            if datos_crudos:
+                # SEPARAMOS POR EL SALTO DE LÍNEA Y PROCESAMOS UNO POR UNO
+                paquetes = datos_crudos.decode('utf-8').split('\n')
+                
+                for comando in paquetes:
+                    comando = comando.strip()
+                    if not comando: 
+                        continue # Ignorar líneas vacías
+                        
+                    print(">> Comando procesado:", comando)
+                    
+                    # --- Lógica de conmutación ---
+                    if comando == "SENO":
+                        onda_actual = puntos_seno
+                    elif comando == "CUADRADA":
+                        onda_actual = puntos_cuadrada
+                    elif comando == "SIERRA":
+                        onda_actual = puntos_sierra
+                        
+                    # --- Lógica de Frecuencia ---
+                    elif comando.startswith("FREQ:"):
+                        try:
+                            nueva_freq_hz = int(comando.split(":")[1])
+                            if nueva_freq_hz > 0:
+                                frecuencia_hz = nueva_freq_hz
+                                f_pio_nueva = frecuencia_hz * N * 2
+                                
+                                sm.active(0)
+                                sm = rp2.StateMachine(0, dac_r2r, freq=f_pio_nueva, out_base=Pin(0))
+                                sm.active(1)
+                        except Exception as e:
+                            print("Error al procesar la frecuencia:", e)
         
-    # TAREA B: Escuchar al servidor
-    try:
-        mensaje = cliente.recv(1024)
-        if mensaje:
-            comando = mensaje.decode('utf-8').strip()
-            print(">> Cambio detectado:", comando)
+        except OSError:
+            # Si no hay mensajes nuevos, el código simplemente pasa de largo
+            pass 
+
+        # TAREA B: Bombear datos a la Máquina de Estados
+        # El CPU inyecta la tabla entera al FIFO a máxima velocidad.
+        # El PIO se encarga de frenarlos y sacarlos al ritmo exacto del reloj.
+        for valor in onda_actual:
+            sm.put(valor)
             
-            # --- Logica de conmutacion ---
-            if comando == "SENO":
-                onda_actual = puntos_seno
-            elif comando == "CUADRADA":
-                onda_actual = puntos_cuadrada
-            elif comando == "SIERRA":
-                onda_actual = puntos_sierra
-            elif comando.startswith("FREQ:"):
-                try:
-                    
-                    freq_hz = int(comando.split(":")[1])
-                    
-                    if freq_hz > 0:
-                        
-                        nuevo_intervalo = int(1000000 / (freq_hz * 100))
-                        
-                       
-                        if nuevo_intervalo < 50:
-                            intervalo_onda = 50
-                        else:
-                            intervalo_onda = nuevo_intervalo
-                            
-                        print("Nueva frecuencia fijada:", freq_hz, "Hz (Intervalo:", intervalo_onda, "us)")
-                except Exception as e:
-                    print("Error al procesar frecuencia:", e)    
-    except OSError:
-        pass
+except KeyboardInterrupt:
+    sm.active(0)
+    print("\nGenerador detenido de forma segura.")
