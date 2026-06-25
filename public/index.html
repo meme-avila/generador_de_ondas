@@ -2,240 +2,160 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Panel de Control AWG</title>
     <style>
-        body { 
-            background-color: #121212; 
-            color: #00ff00; 
-            font-family: 'Courier New', Courier, monospace; 
-            text-align: center;
-            margin-top: 20px;
-            /* Evita que el celular intente hacer zoom o scroll al girar la perilla */
-            touch-action: none; 
-        }
-
-        .panel { 
-            background-color: #222; 
-            border: 2px solid #444; 
-            border-radius: 12px; 
-            padding: 20px; 
-            display: inline-block; 
-            margin-bottom: 20px;
-            box-shadow: 0px 5px 15px rgba(0,0,0,0.8), inset 0px 0px 8px rgba(0,255,0,0.1);
-        }
-
-        button { 
-            background-color: #1a1a1a; 
-            color: #00ff00; 
-            border: 1px solid #00ff00; 
-            font-size: 16px; 
-            padding: 12px 20px; 
-            margin: 8px; 
-            cursor: pointer; 
-            border-radius: 6px; 
-            font-family: inherit; 
-            transition: all 0.2s; 
-        }
-
-        button:hover, button:active { 
-            background-color: #00ff00; 
-            color: #000; 
-            box-shadow: 0px 0px 10px #00ff00; 
-        }
-
-        /* --- ESTILOS DE LA PERILLA DIGITAL --- */
-        .marcador-frecuencia {
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 15px;
-            text-shadow: 0px 0px 5px #00ff00;
-        }
-
-        .contenedor-perilla {
-            width: 140px; 
-            height: 140px;
-            background-color: #111;
-            border-radius: 50%;
-            margin: 0 auto;
-            position: relative;
-            box-shadow: 0 8px 15px rgba(0,0,0,0.8), inset 0 2px 5px rgba(255,255,255,0.1);
-            border: 2px solid #333;
-        }
-
-        .perilla {
-            width: 100%; 
-            height: 100%;
-            border-radius: 50%;
-            background: radial-gradient(circle, #444, #1a1a1a);
-            cursor: grab;
-            position: absolute;
-            /* Ángulo inicial (-135 grados = equivalente a 1 Hz) */
-            transform: rotate(-135deg); 
-            box-shadow: inset 0px 0px 10px rgba(0,0,0,0.9);
-        }
-
-        .perilla:active {
-            cursor: grabbing;
-        }
-
-        .indicador-perilla {
-            width: 6px; 
-            height: 25px;
-            background-color: #00ff00;
-            margin: 10px auto; /* Lo coloca en la parte superior central */
-            border-radius: 3px;
-            box-shadow: 0px 0px 8px #00ff00;
-        }
+        :root { --color-neon: #00ff00; --fondo-oscuro: #121212; --panel-bg: #1e1e1e; }
+        body { background-color: var(--fondo-oscuro); color: var(--color-neon); font-family: 'Courier New', Courier, monospace; text-align: center; margin: 0; padding: 15px; touch-action: none; user-select: none; }
+        
+        .layout-principal { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; max-width: 900px; margin: 0 auto; }
+        .panel { background-color: var(--panel-bg); border: 2px solid #333; border-radius: 12px; padding: 20px; box-sizing: border-box; }
+        
+        .led { width: 12px; height: 12px; border-radius: 50%; background: #ff3333; display: inline-block; transition: 0.3s; }
+        .conectado { background: var(--color-neon); box-shadow: 0 0 10px var(--color-neon); }
+        
+        .grid-ondas { display: flex; flex-direction: column; gap: 10px; margin-top: 15px; }
+        .btn-onda { width: 100%; padding: 15px; background: #1a1a1a; color: var(--color-neon); border: 2px solid #333; cursor: pointer; border-radius: 8px; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .btn-onda.activo { background: var(--color-neon); color: #000; border-color: var(--color-neon); }
+        .btn-onda svg { width: 40px; height: 20px; stroke: var(--color-neon); fill: none; stroke-width: 3; }
+        .btn-onda.activo svg { stroke: #000; }
+        
+        .marcador-frecuencia { font-size: 30px; margin: 20px 0; background: #000; padding: 10px; border: 1px inset #333; }
+        .contenedor-perilla { width: 140px; height: 140px; border-radius: 50%; border: 3px solid #222; margin: 0 auto 20px; position: relative; background: #111; box-shadow: 0 10px 20px rgba(0,0,0,0.8); }
+        .perilla { width: 100%; height: 100%; border-radius: 50%; cursor: grab; background: radial-gradient(circle, #555, #111); transform: rotate(-135deg); position: absolute; z-index: 10; }
+        .indicador-perilla { width: 6px; height: 30px; background-color: var(--color-neon); margin: 10px auto; border-radius: 3px; pointer-events: none; }
+        
+        .btn-accion { width: 100%; padding: 12px; margin-top: 10px; background: #1a1a1a; color: var(--color-neon); border: 1px solid var(--color-neon); cursor: pointer; font-weight: bold; }
+        .btn-ancho { width: 100%; margin-top: 15px; }
     </style>
 </head>
 <body>
-    <h2>GENERADOR DE FUNCIONES MCP4822</h2>
+    <h2>GENERADOR R2R</h2>
+    <div style="margin-bottom: 15px;"><div id="led" class="led"></div> <span id="txt">Conectando...</span></div>
     
-    <div class="panel">
-        <h3>FORMA DE ONDA</h3>
-        <button onclick="mandarComando('SENO')">SENOIDAL</button>
-        <button onclick="mandarComando('CUADRADA')">CUADRADA</button>
-        <button onclick="mandarComando('SIERRA')">DIENTE DE SIERRA</button>
-    </div>
-    
-    <br>
+    <div class="layout-principal">
+        <div class="panel">
+            <h3>FORMA DE ONDA</h3>
+            
+            <button id="btn-salida" class="btn-accion btn-ancho" style="margin-top: 0; margin-bottom: 20px; font-size: 16px;" onclick="toggleSalida()">
+                SALIDA: ACTIVADA
+            </button>
 
-    <div class="panel">
-        <h3>FRECUENCIA</h3>
-        <div class="marcador-frecuencia" id="pantalla-frecuencia">1 Hz</div>
-        
-        <div class="contenedor-perilla">
-        <div class="perilla" id="miPerilla">
-            <div class="indicador-perilla"></div>
+            <div class="grid-ondas">
+                <button class="btn-onda activo" onclick="cmd('SENO', this)">
+                    <svg viewBox="0 0 100 30"><path d="M 0,15 Q 25,-10 50,15 T 100,15" /></svg>
+                    SENOIDAL
+                </button>
+                <button class="btn-onda" onclick="cmd('CUADRADA', this)">
+                    <svg viewBox="0 0 100 30"><path d="M 0,25 L 0,5 L 50,5 L 50,25 L 100,25" /></svg>
+                    CUADRADA
+                </button>
+                <button class="btn-onda" onclick="cmd('SIERRA', this)">
+                    <svg viewBox="0 0 100 30"><path d="M 0,25 L 50,5 L 50,25 L 100,5" /></svg>
+                    SIERRA
+                </button>
+            </div>
         </div>
-    </div>
-
-    <div style="margin-top: 25px; border-top: 1px dashed #444; padding-top: 15px;">
-        <h4 style="margin: 0 0 10px 0; color: #888;">ENTRADA DIRECTA</h4>
-        <input type="number" id="input-frecuencia" placeholder="Ej. 150000" min="1" 
-               style="padding: 10px; font-size: 16px; width: 140px; border-radius: 5px; 
-                      border: 1px solid #00ff00; background-color: #111; color: #00ff00; 
-                      font-family: inherit; text-align: center; outline: none;">
-        <button onclick="enviarFrecuenciaExacta()">FIJAR</button>
-    </div>
-</div> ```
+        
+        <div class="panel">
+            <h3>FRECUENCIA</h3>
+            <div class="marcador-frecuencia" id="pantalla">60 Hz</div>
+            <div class="contenedor-perilla"><div class="perilla" id="perilla"><div class="indicador-perilla"></div></div></div>
+            <input type="number" id="manual" placeholder="Frecuencia (Hz)" style="width:90%; padding:10px; background:#000; color:#0f0; border:1px solid #333; margin-bottom: 10px;">
+            <button class="btn-accion" onclick="fijar()">FIJAR</button>
+            <button class="btn-accion" onclick="fijar(33250000)">MEDIA (33.25 MHz)</button>
+            <button class="btn-accion" style="border-color:#f33; color:#f33" onclick="fijar(66500000)">MÁXIMA (66.5 MHz)</button>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        const socket = io();
-        const perilla = document.getElementById('miPerilla');
-        const pantalla = document.getElementById('pantalla-frecuencia');
+        const socket = io(); 
+        let frec = 60; 
+        let arrastrando = false;
         
-        let estaArrastrando = false;
-        let frecuenciaActual = 1;
+        // --- VARIABLES DEL MUTE RECUPERADAS ---
+        let salidaActivada = true;
+        let ondaPrevia = 'SENO'; 
 
-        function mandarComando(orden) {
-            socket.emit('comando_generador', orden);
-        }
-
-        // --- MATEMÁTICAS TRIGONOMÉTRICAS PARA ROTAR LA PERILLA ---
-        function calcularGiro(e) {
-            if (!estaArrastrando) return;
-
-            // Obtenemos el centro exacto de la perilla en la pantalla
-            const rect = perilla.getBoundingClientRect();
-            const centroX = rect.left + rect.width / 2;
-            const centroY = rect.top + rect.height / 2;
-            
-            // Detectar si es el ratón o el dedo en la pantalla táctil
-            const clienteX = e.clientX || (e.touches && e.touches[0].clientX);
-            const clienteY = e.clientY || (e.touches && e.touches[0].clientY);
-
-            // Coordenadas relativas al centro
-            const x = clienteX - centroX;
-            const y = clienteY - centroY;
-            
-            // Calcular el ángulo en radianes y pasarlo a grados
-            let radianes = Math.atan2(y, x);
-            let grados = (radianes * 180) / Math.PI;
-            
-            // Ajustar el cero a la parte superior (en lugar de a la derecha)
-            grados = grados + 90; 
-            if (grados > 180) grados -= 360;
-
-            // Limitar el giro mecánico (para que no dé la vuelta completa)
-            // Límite izquierdo: -135°, Límite derecho: 135° (Rango total de 270°)
-            if (grados < -135) grados = -135;
-            if (grados > 135) grados = 135;
-
-            // Aplicar la rotación visual en CSS
-            perilla.style.transform = `rotate(${grados}deg)`;
-
-            // Mapear los grados físicos (-135 a 135) a nuestra escala de Hertz (1 a 100)
-            let porcentaje = (grados + 135) / 270; 
-            frecuenciaActual = Math.round(porcentaje * 99) + 1;
-            
-            // Actualizar solo el texto verde (SIN ENVIAR A LA PICO AÚN)
-            pantalla.innerText = frecuenciaActual + ' Hz';
-        }
-
-        // --- EVENTOS DEL RATÓN (COMPUTADORA) ---
-        perilla.addEventListener('mousedown', () => estaArrastrando = true);
-        document.addEventListener('mousemove', calcularGiro);
-        document.addEventListener('mouseup', () => {
-            if (estaArrastrando) {
-                estaArrastrando = false;
-                // ¡AQUÍ ENVIAMOS EL COMANDO! Solo cuando sueltas el click
-                mandarComando('FREQ:' + frecuenciaActual);
-            }
+        socket.on('estado_pico', d => { 
+            document.getElementById('led').className = d.conectada ? 'led conectado' : 'led'; 
+            document.getElementById('txt').innerText = d.conectada ? 'Conectado' : 'Desconectado'; 
         });
-
-        // --- EVENTOS TÁCTILES (CELULAR) ---
-        perilla.addEventListener('touchstart', (e) => { 
-            estaArrastrando = true; 
-            calcularGiro(e); 
-        }, {passive: false});
         
-        document.addEventListener('touchmove', (e) => {
-            if (estaArrastrando) {
-                e.preventDefault(); // Evita que la pantalla se deslice mientras giras
-                calcularGiro(e);
-            }
-        }, {passive: false});
-        
-        document.addEventListener('touchend', () => {
-            if (estaArrastrando) {
-                estaArrastrando = false;
-                // ¡AQUÍ ENVIAMOS EL COMANDO! Solo cuando levantas el dedo
-                mandarComando('FREQ:' + frecuenciaActual);
-            }
-        });
-        // --- NUEVA FUNCI�N PARA LA TEXTBOX ---
-        function enviarFrecuenciaExacta() {
-            const inputFrecuencia = document.getElementById('input-frecuencia');
-            const valorExacto = parseInt(inputFrecuencia.value);
-
-            // Validaci�n de seguridad b�sica
-            if (!isNaN(valorExacto) && valorExacto > 0) {
-                // 1. Actualizamos la variable global
-                frecuenciaActual = valorExacto;
-                
-                // 2. Actualizamos el letrero verde visual
-                pantalla.innerText = frecuenciaActual + ' Hz';
-                
-                // 3. �Fuego! Disparamos el comando a Node.js
-                mandarComando('FREQ:' + frecuenciaActual);
-                
-                // 4. Limpiamos la caja para el siguiente n�mero
-                inputFrecuencia.value = '';
+        // --- LÓGICA DEL MUTE RECUPERADA ---
+        function toggleSalida() {
+            salidaActivada = !salidaActivada;
+            const btnSalida = document.getElementById('btn-salida');
+            
+            if (salidaActivada) {
+                btnSalida.innerText = 'SALIDA: ACTIVADA';
+                btnSalida.style.borderColor = 'var(--color-neon)';
+                btnSalida.style.color = 'var(--color-neon)';
+                socket.emit('comando_generador', ondaPrevia); // Restaura la onda que tenías
             } else {
-                alert("�Error de instrumentaci�n! Introduce una frecuencia v�lida mayor a 0 Hz.");
+                btnSalida.innerText = 'SALIDA: SILENCIADA (MUTE)';
+                btnSalida.style.borderColor = '#ff3333';
+                btnSalida.style.color = '#ff3333';
+                socket.emit('comando_generador', 'APAGAR'); // Manda a 0V
             }
         }
 
-        // (Opcional) Poder presionar "Enter" en el teclado para enviar, sin usar el bot�n
-        document.getElementById('input-frecuencia').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                enviarFrecuenciaExacta();
+        // --- SELECCIÓN DE ONDA CONECTADA AL MUTE ---
+        function cmd(o, el) { 
+            ondaPrevia = o; // Guardamos en memoria qué onda tocaste
+            
+            if (!salidaActivada) {
+                toggleSalida(); // Si estaba en MUTE y tocas una onda, lo desmutea automático
+            } else {
+                socket.emit('comando_generador', o);
             }
-        });
+
+            if(el) { 
+                document.querySelectorAll('.btn-onda').forEach(b=>b.classList.remove('activo')); 
+                el.classList.add('activo'); 
+            }
+        }
+        
+        function fijar(f) { 
+            frec = f || parseInt(document.getElementById('manual').value); 
+            document.getElementById('pantalla').innerText = frec.toLocaleString() + ' Hz'; 
+            socket.emit('comando_generador', 'FREQ:' + frec); 
+        }
+
+        // --- LÓGICA TÁCTIL (CORREGIDA Y MANTENIDA) ---
+        const perilla = document.getElementById('perilla');
+        const mover = (e) => {
+            if(!arrastrando) return;
+            e.preventDefault(); // Evita scroll en la tablet
+            const rect = perilla.getBoundingClientRect();
+            const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+            const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+            
+            const x = clientX - (rect.left + rect.width/2);
+            const y = clientY - (rect.top + rect.height/2);
+            let grad = (Math.atan2(y, x) * 180 / Math.PI) + 90;
+            if(grad > 135) grad = 135; if(grad < -135) grad = -135;
+            perilla.style.transform = `rotate(${grad}deg)`;
+            frec = Math.round(((grad + 135)/270) * 66499999) + 1;
+            document.getElementById('pantalla').innerText = frec.toLocaleString() + ' Hz';
+        };
+
+        const fin = () => { 
+            if(arrastrando) { 
+                arrastrando = false; 
+                socket.emit('comando_generador', 'FREQ:' + frec); 
+            } 
+        };
+
+        perilla.addEventListener('mousedown', () => arrastrando = true);
+        perilla.addEventListener('touchstart', (e) => { arrastrando = true; mover(e); }, {passive: false});
+        
+        document.addEventListener('mousemove', mover);
+        document.addEventListener('touchmove', mover, {passive: false});
+        
+        document.addEventListener('mouseup', fin);
+        document.addEventListener('touchend', fin);
     </script>
 </body>
 </html>
